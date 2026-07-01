@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>My Library Scanner</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #1A1A2E; color: #fff; padding: 20px 16px; min-height: 100vh; }
+  .header { text-align: center; margin-bottom: 24px; }
+  .header h1 { font-size: 22px; color: #F5A623; margin-bottom: 4px; }
+  .header p { font-size: 12px; color: #A0AEC0; }
+  .card { background: #16213E; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .tab-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: bold; background: #0F3460; color: #A0AEC0; }
+  .tab.active { background: #E94560; color: #fff; }
+  label { display: block; font-size: 11px; color: #A0AEC0; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  input { width: 100%; padding: 14px 12px; border-radius: 8px; border: 2px solid #0F3460; background: #1A1A2E; color: #fff; font-size: 16px; outline: none; }
+  input:focus { border-color: #E94560; }
+  .btn { display: block; width: 100%; padding: 14px; margin-top: 10px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
+  .btn-primary { background: #E94560; color: white; }
+  .btn-secondary { background: #0F3460; color: #A0AEC0; }
+  .btn-camera { background: #1D4E6E; color: #7DD3FC; }
+  .btn-camera.active { background: #7DD3FC; color: #0F3460; }
+  .status { margin-top: 14px; padding: 12px; border-radius: 8px; font-size: 13px; line-height: 1.6; display: none; white-space: pre-line; }
+  .success { background: #0D4F3C; color: #A8FFD8; display: block; }
+  .error { background: #4A1A1A; color: #FFB3B3; display: block; }
+  .loading { background: #0F3460; color: #A0AEC0; display: block; }
+  #scannerWrap { display: none; margin-top: 12px; border-radius: 10px; overflow: hidden; position: relative; background: #000; }
+  #scannerWrap.active { display: block; }
+  #interactive { width: 100%; position: relative; }
+  #interactive video { width: 100%; display: block; border-radius: 10px; }
+  #interactive canvas { display: none; }
+  .scan-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .scan-box { width: 75%; height: 100px; border: 2px solid #E94560; border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); }
+  .scan-line { position: absolute; left: 12.5%; width: 75%; height: 2px; background: #E94560; animation: scanline 2s linear infinite; opacity: 0.8; }
+  @keyframes scanline { 0% { top: calc(50% - 50px); } 50% { top: calc(50% + 50px); } 100% { top: calc(50% - 50px); } }
+  .scan-hint { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; color: rgba(255,255,255,0.7); }
+  .detected-flash { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.4); border-radius: 10px; display: none; }
+  .detected-flash.show { display: block; }
+  .history h3 { font-size: 11px; color: #F5A623; margin-bottom: 10px; text-transform: uppercase; }
+  .history-item { background: #1A1A2E; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; color: #A0AEC0; border-left: 3px solid #E94560; }
+  .history-item strong { display: block; color: #fff; font-size: 13px; margin-bottom: 2px; }
+  .badge { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #0F3460; color: #A0AEC0; margin-left: 6px; }
+  .wish { background: #3A1A5A; color: #C4A8FF; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>My Library</h1>
+  <p>Scan or type an ISBN to add a book</p>
+</div>
+
+<div class="card">
+  <div class="tab-row">
+    <button class="tab active" id="tabBooks">Books</button>
+    <button class="tab" id="tabWishlist">Wishlist</button>
+  </div>
+
+  <button class="btn btn-camera" id="btnCamera">Open Camera Scanner</button>
+  <div id="scannerWrap">
+    <div id="interactive">
+      <div class="scan-overlay">
+        <div class="scan-box"></div>
+      </div>
+      <div class="scan-line"></div>
+      <div class="scan-hint">Point camera at barcode</div>
+      <div class="detected-flash" id="flash"></div>
+    </div>
+    <button class="btn btn-secondary" id="btnStopCamera" style="margin-top:8px;">Stop Camera</button>
+  </div>
+
+  <label for="isbn" style="margin-top:14px;">Or type / paste ISBN</label>
+  <input type="text" id="isbn" inputmode="text" placeholder="e.g. 9780743273565"
+    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+  <button class="btn btn-primary" id="btnLookup">Look Up and Add</button>
+  <button class="btn btn-secondary" id="btnClear">Clear</button>
+
+  <div id="status" class="status"></div>
+</div>
+
+<div class="card" id="historyCard" style="display:none">
+  <div class="history">
+    <h3>Added This Session</h3>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+  var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbycDr7tLQNiM8kbITQpUYxYt_1uWdED7mtLhcAcSkNQddIeoI4i_BBkaQkHYATSZjOD2w/exec';
+
+  var mode = 'Books';
+  var history = [];
+  var scannerRunning = false;
+  var lastScanned = '';
+  var scanCooldown = false;
+
+  document.getElementById('tabBooks').addEventListener('click', function() {
+    mode = 'Books';
+    document.getElementById('tabBooks').classList.add('active');
+    document.getElementById('tabWishlist').classList.remove('active');
+  });
+  document.getElementById('tabWishlist').addEventListener('click', function() {
+    mode = 'Wishlist';
+    document.getElementById('tabWishlist').classList.add('active');
+    document.getElementById('tabBooks').classList.remove('active');
+  });
+
+  document.getElementById('btnLookup').addEventListener('click', function() { doLookup(); });
+  document.getElementById('btnClear').addEventListener('click', function() {
+    document.getElementById('isbn').value = '';
+    var s = document.getElementById('status');
+    s.className = 'status';
+    s.textContent = '';
+  });
+  document.getElementById('isbn').addEventListener('keydown', function(e) {
+    if (e.keyCode === 13) doLookup();
+  });
+
+  document.getElementById('btnCamera').addEventListener('click', function() {
+    if (!scannerRunning) startScanner();
+  });
+  document.getElementById('btnStopCamera').addEventListener('click', function() {
+    stopScanner();
+  });
+
+  function startScanner() {
+    document.getElementById('scannerWrap').classList.add('active');
+    document.getElementById('btnCamera').classList.add('active');
+    document.getElementById('btnCamera').textContent = 'Camera On';
+    setStatus('loading', 'Starting camera...');
+
+    Quagga.init({
+      inputStream: {
+        name: 'Live',
+        type: 'LiveStream',
+        target: document.getElementById('interactive'),
+        constraints: {
+          facingMode: 'environment',
+          width: { min: 640 },
+          height: { min: 480 },
+          aspectRatio: { min: 1, max: 2 }
+        }
+      },
+      locator: { patchSize: 'medium', halfSample: true },
+      numOfWorkers: 2,
+      frequency: 10,
+      decoder: {
+        readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader']
+      },
+      locate: true
+    }, function(err) {
+      if (err) {
+        setStatus('error', 'Camera error: ' + err.message + '\nPlease allow camera access when prompted.');
+        stopScanner();
+        return;
+      }
+      scannerRunning = true;
+      setStatus('loading', 'Point camera at a barcode...');
+      Quagga.start();
+    });
+
+    Quagga.onDetected(function(result) {
+      if (scanCooldown) return;
+      var code = result.codeResult.code;
+      var clean = code.replace(/\D/g, '');
+      var isISBN = (clean.length === 13 && (clean.indexOf('978') === 0 || clean.indexOf('979') === 0))
+                || (clean.length === 10);
+      if (!isISBN) return;
+      if (clean === lastScanned) return;
+      lastScanned = clean;
+      scanCooldown = true;
+
+      var flash = document.getElementById('flash');
+      flash.classList.add('show');
+      setTimeout(function() { flash.classList.remove('show'); }, 200);
+      if (navigator.vibrate) navigator.vibrate(100);
+
+      document.getElementById('isbn').value = clean;
+      setStatus('loading', 'Detected: ' + clean + '\nLooking up...');
+      doLookupWithISBN(clean);
+
+      setTimeout(function() { scanCooldown = false; lastScanned = ''; }, 3000);
+    });
+  }
+
+  function stopScanner() {
+    if (scannerRunning) { Quagga.stop(); scannerRunning = false; }
+    document.getElementById('scannerWrap').classList.remove('active');
+    document.getElementById('btnCamera').classList.remove('active');
+    document.getElementById('btnCamera').textContent = 'Open Camera Scanner';
+    var s = document.getElementById('status');
+    if (s.classList.contains('loading')) { s.className = 'status'; s.textContent = ''; }
+  }
+
+  function doLookup() {
+    var val = document.getElementById('isbn').value.trim().replace(/-/g,'').replace(/\./g,'');
+    doLookupWithISBN(val);
+  }
+
+  function doLookupWithISBN(val) {
+    if (!val) return;
+    if (val.length !== 10 && val.length !== 13) {
+      setStatus('error', 'Need 10 or 13 digits. Got ' + val.length + ': ' + val);
+      return;
+    }
+    setStatus('loading', 'Looking up ' + val + '...');
+
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ isbn: val, sheetName: mode }),
+      headers: { 'Content-Type': 'text/plain' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(result) {
+      if (result.error) { setStatus('error', result.error); return; }
+      setStatus('success', 'Added to ' + mode + '\n' + result.title + '\n' + result.author + (result.year ? ' - ' + result.year : ''));
+      history.unshift({ title: result.title, author: result.author, year: result.year, mode: mode });
+      showHistory();
+      document.getElementById('isbn').value = '';
+      setTimeout(function() { lastScanned = ''; }, 1000);
+    })
+    .catch(function(err) {
+      setStatus('error', 'Network error: ' + err.message);
+    });
+  }
+
+  function setStatus(type, msg) {
+    var s = document.getElementById('status');
+    s.className = 'status ' + type;
+    s.textContent = msg;
+  }
+
+  function showHistory() {
+    document.getElementById('historyCard').style.display = 'block';
+    document.getElementById('historyList').innerHTML = history.slice(0,10).map(function(b) {
+      var bc = b.mode === 'Wishlist' ? 'badge wish' : 'badge';
+      return '<div class="history-item"><strong>' + b.title +
+        '<span class="' + bc + '">' + b.mode + '</span></strong>' +
+        b.author + (b.year ? ' - ' + b.year : '') + '</div>';
+    }).join('');
+  }
+</script>
+</body>
+</html>
