@@ -207,11 +207,9 @@
     }
     setStatus('loading', 'Looking up ' + val + '...');
 
-    fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ isbn: val, sheetName: mode }),
-      headers: { 'Content-Type': 'text/plain' }
-    })
+    var url = APPS_SCRIPT_URL + '?isbn=' + encodeURIComponent(val) + '&sheetName=' + encodeURIComponent(mode);
+
+    fetch(url, { redirect: 'follow' })
     .then(function(r) { return r.json(); })
     .then(function(result) {
       if (result.error) { setStatus('error', result.error); return; }
