@@ -152,7 +152,7 @@
       locate: true
     }, function(err) {
       if (err) {
-        setStatus('error', 'Camera error: ' + err.message + '\nPlease allow camera access when prompted.');
+        setStatus('error', 'Camera error: ' + err.message);
         stopScanner();
         return;
       }
@@ -207,38 +207,43 @@
     }
     setStatus('loading', 'Looking up ' + val + '...');
 
-    var url = APPS_SCRIPT_URL + '?isbn=' + encodeURIComponent(val) + '&sheetName=' + encodeURIComponent(mode);
-    setStatus('loading', 'Calling: ' + url);
+    // JSONP call - bypasses CORS entirely
+    var callbackName = 'jsonp_' + Date.now();
+    var script = document.createElement('script');
+    var timeout = setTimeout(function() {
+      cleanup();
+      setStatus('error', 'Request timed out. Check your internet connection.');
+    }, 15000);
 
-    fetch(url, { redirect: 'follow', mode: 'no-cors' })
-.then(function(r) {
-  setStatus('loading', 'Got response. Status: ' + r.status + ' Type: ' + r.type);
-  // no-cors returns an opaque response - we can't read it directly
-  // so we use a workaround via a script tag instead
-  throw new Error('switching to script method');
-})
-.catch(function() {
-  // Use JSONP-style approach which bypasses CORS entirely
-  setStatus('loading', 'Trying alternate method...');
-  var script = document.createElement('script');
-  var callbackName = 'cb_' + Date.now();
-  window[callbackName] = function(result) {
-    document.head.removeChild(script);
-    delete window[callbackName];
-    if (result.error) { setStatus('error', result.error); return; }
-    setStatus('success', 'Added to ' + mode + '\n' + result.title + '\n' + result.author + (result.year ? ' - ' + result.year : ''));
-    history.unshift({ title: result.title, author: result.author, year: result.year, mode: mode });
-    showHistory();
-    document.getElementById('isbn').value = '';
-    setTimeout(function() { lastScanned = ''; }, 1000);
-  };
-  script.src = url + '&callback=' + callbackName;
-  script.onerror = function() {
-    setStatus('error', 'Request failed. Check your Apps Script deployment is set to Anyone.');
-  };
-  document.head.appendChild(script);
-});
+    function cleanup() {
+      clearTimeout(timeout);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      delete window[callbackName];
+    }
+
+    window[callbackName] = function(result) {
+      cleanup();
+      if (result.error) { setStatus('error', result.error); return; }
+      setStatus('success', 'Added to ' + mode + '\n' + result.title + '\n' + result.author + (result.year ? ' - ' + result.year : ''));
+      history.unshift({ title: result.title, author: result.author, year: result.year, mode: mode });
+      showHistory();
+      document.getElementById('isbn').value = '';
+      setTimeout(function() { lastScanned = ''; }, 1000);
+    };
+
+    script.onerror = function() {
+      cleanup();
+      setStatus('error', 'Request failed. Make sure the Apps Script is deployed as Anyone.');
+    };
+
+    script.src = APPS_SCRIPT_URL
+      + '?isbn=' + encodeURIComponent(val)
+      + '&sheetName=' + encodeURIComponent(mode)
+      + '&callback=' + callbackName;
+
+    document.head.appendChild(script);
   }
+
   function setStatus(type, msg) {
     var s = document.getElementById('status');
     s.className = 'status ' + type;
