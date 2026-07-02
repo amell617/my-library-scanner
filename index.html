@@ -208,10 +208,16 @@
     setStatus('loading', 'Looking up ' + val + '...');
 
     var url = APPS_SCRIPT_URL + '?isbn=' + encodeURIComponent(val) + '&sheetName=' + encodeURIComponent(mode);
+    setStatus('loading', 'Calling: ' + url);
 
-    fetch(url, { redirect: 'follow' })
-    .then(function(r) { return r.json(); })
-    .then(function(result) {
+    fetch(url, { redirect: 'follow', mode: 'cors' })
+    .then(function(r) {
+      setStatus('loading', 'Got response. Status: ' + r.status + ' Type: ' + r.type);
+      return r.text();
+    })
+    .then(function(text) {
+      setStatus('loading', 'Raw response: ' + text.substring(0, 200));
+      var result = JSON.parse(text);
       if (result.error) { setStatus('error', result.error); return; }
       setStatus('success', 'Added to ' + mode + '\n' + result.title + '\n' + result.author + (result.year ? ' - ' + result.year : ''));
       history.unshift({ title: result.title, author: result.author, year: result.year, mode: mode });
@@ -220,10 +226,9 @@
       setTimeout(function() { lastScanned = ''; }, 1000);
     })
     .catch(function(err) {
-      setStatus('error', 'Network error: ' + err.message);
+      setStatus('error', 'Fetch failed at: ' + url + '\nError: ' + err.message + '\nType: ' + err.name);
     });
   }
-
   function setStatus(type, msg) {
     var s = document.getElementById('status');
     s.className = 'status ' + type;
