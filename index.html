@@ -210,24 +210,34 @@
     var url = APPS_SCRIPT_URL + '?isbn=' + encodeURIComponent(val) + '&sheetName=' + encodeURIComponent(mode);
     setStatus('loading', 'Calling: ' + url);
 
-    fetch(url, { redirect: 'follow', mode: 'cors' })
-    .then(function(r) {
-      setStatus('loading', 'Got response. Status: ' + r.status + ' Type: ' + r.type);
-      return r.text();
-    })
-    .then(function(text) {
-      setStatus('loading', 'Raw response: ' + text.substring(0, 200));
-      var result = JSON.parse(text);
-      if (result.error) { setStatus('error', result.error); return; }
-      setStatus('success', 'Added to ' + mode + '\n' + result.title + '\n' + result.author + (result.year ? ' - ' + result.year : ''));
-      history.unshift({ title: result.title, author: result.author, year: result.year, mode: mode });
-      showHistory();
-      document.getElementById('isbn').value = '';
-      setTimeout(function() { lastScanned = ''; }, 1000);
-    })
-    .catch(function(err) {
-      setStatus('error', 'Fetch failed at: ' + url + '\nError: ' + err.message + '\nType: ' + err.name);
-    });
+    fetch(url, { redirect: 'follow', mode: 'no-cors' })
+.then(function(r) {
+  setStatus('loading', 'Got response. Status: ' + r.status + ' Type: ' + r.type);
+  // no-cors returns an opaque response - we can't read it directly
+  // so we use a workaround via a script tag instead
+  throw new Error('switching to script method');
+})
+.catch(function() {
+  // Use JSONP-style approach which bypasses CORS entirely
+  setStatus('loading', 'Trying alternate method...');
+  var script = document.createElement('script');
+  var callbackName = 'cb_' + Date.now();
+  window[callbackName] = function(result) {
+    document.head.removeChild(script);
+    delete window[callbackName];
+    if (result.error) { setStatus('error', result.error); return; }
+    setStatus('success', 'Added to ' + mode + '\n' + result.title + '\n' + result.author + (result.year ? ' - ' + result.year : ''));
+    history.unshift({ title: result.title, author: result.author, year: result.year, mode: mode });
+    showHistory();
+    document.getElementById('isbn').value = '';
+    setTimeout(function() { lastScanned = ''; }, 1000);
+  };
+  script.src = url + '&callback=' + callbackName;
+  script.onerror = function() {
+    setStatus('error', 'Request failed. Check your Apps Script deployment is set to Anyone.');
+  };
+  document.head.appendChild(script);
+});
   }
   function setStatus(type, msg) {
     var s = document.getElementById('status');
